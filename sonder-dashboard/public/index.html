@@ -193,8 +193,19 @@ const sBg = s => ({live:'var(--green-dim)',development:'var(--amber-dim)',broken
 const cColor = c => ({client:'#3b82f6','side-project':'#a855f7',internal:'#9333ea',saas:'#22c55e',tool:'#f59e0b'}[c] || '#6b7280');
 const cLabel = c => ({client:'Client','side-project':'Side Project',internal:'Internal',saas:'SaaS',tool:'Tool'}[c] || c);
 
-function load() { try { const d = localStorage.getItem('sonder-dashboard-v2'); if (d) state.sites = JSON.parse(d); } catch {} }
-function save() { localStorage.setItem('sonder-dashboard-v2', JSON.stringify(state.sites)); }
+function load() { try { const d = localStorage.getItem('sonder-dashboard-v2'); if (d) state.sites = JSON.parse(d); } catch(e) { console.error('Load error:', e); } }
+function save() { 
+    try {
+        localStorage.setItem('sonder-dashboard-v2', JSON.stringify(state.sites));
+    } catch(e) {
+        if (e.name === 'QuotaExceededError') {
+            toast('Storage full - images too large');
+            console.error('Storage exceeded. Total sites:', state.sites.length);
+        } else {
+            console.error('Save error:', e);
+        }
+    }
+}
 
 function filtered() {
     let s = [...state.sites];
@@ -232,9 +243,11 @@ function addSite(data) {
 
 function updateSite(id, data) {
     const i = state.sites.findIndex(s => s.id === id);
-    if (i === -1) return;
+    if (i === -1) { console.warn('Site not found:', id); return; }
     state.sites[i] = {...state.sites[i], ...data, updatedAt: new Date().toISOString()};
-    state.selectedSite = state.sites[i];
+    if (state.selectedSite?.id === id) {
+        state.selectedSite = state.sites[i];
+    }
     save(); render();
 }
 
@@ -445,8 +458,24 @@ function handleImageUpload(e, siteId) {
     
     const reader = new FileReader();
     reader.onload = (ev) => {
-        updateSite(siteId, { thumbnail: ev.target.result });
-        toast('Image uploaded');
+        const img = new Image();
+        img.onload = () => {
+            // Resize to max 600px width to save storage
+            const canvas = document.createElement('canvas');
+            const maxWidth = 600;
+            const scale = maxWidth / img.width;
+            canvas.width = img.width > maxWidth ? maxWidth : img.width;
+            canvas.height = img.width > maxWidth ? img.height * scale : img.height;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            // Convert to JPEG with 0.8 quality to reduce size
+            const compressed = canvas.toDataURL('image/jpeg', 0.8);
+            updateSite(siteId, { thumbnail: compressed });
+            toast('Image uploaded');
+        };
+        img.src = ev.target.result;
     };
     reader.readAsDataURL(file);
 }
