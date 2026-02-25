@@ -587,22 +587,30 @@ function addDefaultThumbs() {
         'Kyneton Party Hire': 'https://v3b.fal.media/files/b/0a8fe26c/eqr4p1nObBBLXXf3OqFhp_a5288d270be84c01ad53d60147f4713c.jpg',
         'Little Legends': 'https://v3b.fal.media/files/b/0a8fe26c/5fvWHntfpSehmMNMR8VpM_a6fe7fa8156a4000a5a25e5dade0f47b.jpg',
         "JJ's Garden": 'https://v3b.fal.media/files/b/0a8fe26d/yN91kslI3BjIZb5e1TDkX_702d1c709a8d4080b048cdba91e35a0f.jpg',
+        'jjs-garden': 'https://v3b.fal.media/files/b/0a8fe26d/yN91kslI3BjIZb5e1TDkX_702d1c709a8d4080b048cdba91e35a0f.jpg',
         'Follow': 'https://v3b.fal.media/files/b/0a8fe26d/rt-w09BjYN_wnpdpBg4rO_111e57b266be45a8ba65e4393cd41120.jpg',
-        'Sonder HQ': 'https://v3b.fal.media/files/b/0a8fe26e/z2RxkrMGruAbr6S85b_rM_3b23977918f34434a5c86d2c12f47ab4.jpg'
+        'follow-site': 'https://v3b.fal.media/files/b/0a8fe26d/rt-w09BjYN_wnpdpBg4rO_111e57b266be45a8ba65e4393cd41120.jpg',
+        'Sonder HQ': 'https://v3b.fal.media/files/b/0a8fe26e/z2RxkrMGruAbr6S85b_rM_3b23977918f34434a5c86d2c12f47ab4.jpg',
+        'sonder-hq': 'https://v3b.fal.media/files/b/0a8fe26e/z2RxkrMGruAbr6S85b_rM_3b23977918f34434a5c86d2c12f47ab4.jpg'
     };
+    
+    // Ask if they want to overwrite existing thumbnails
+    const force = confirm('Replace ALL thumbnails (even existing ones)?');
     
     let updated = 0;
     state.sites.forEach(site => {
-        if (thumbs[site.name] && !site.thumbnail) {
-            updateSite(site.id, { thumbnail: thumbs[site.name] });
-            updated++;
+        if (thumbs[site.name]) {
+            if (force || !site.thumbnail) {
+                updateSite(site.id, { thumbnail: thumbs[site.name] });
+                updated++;
+            }
         }
     });
     
     if (updated > 0) {
-        toast(`Added ${updated} AI thumbnails`);
+        toast(`Updated ${updated} thumbnails`);
     } else {
-        toast('All projects already have images');
+        toast('No matches found');
     }
 }
 
