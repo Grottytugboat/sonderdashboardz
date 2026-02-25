@@ -239,9 +239,15 @@ function updateSite(id, data) {
 }
 
 function deleteSite(id) {
+    const site = state.sites.find(s => s.id === id);
     state.sites = state.sites.filter(s => s.id !== id);
     state.selectedSite = null;
     save(); render(); toast('Project removed');
+    
+    // If it has a vercelId, ask if they want to delete from Vercel too
+    if (site?.vercelId && confirm('Also delete from Vercel?')) {
+        deleteFromVercel(site.vercelId, site.name);
+    }
 }
 
 function render() {
@@ -274,6 +280,7 @@ function render() {
             </div>
         </div>
         <div class="sidebar-footer">
+            <button onclick="syncVercel()" title="Sync from Vercel">⚡ Vercel</button>
             <button onclick="exportJSON()">Export</button>
             <button onclick="document.getElementById('imp').click()">Import</button>
             <input type="file" id="imp" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -442,6 +449,104 @@ function handleImageUpload(e, siteId) {
         toast('Image uploaded');
     };
     reader.readAsDataURL(file);
+}
+
+async function syncVercel() {
+    let VERCEL_TOKEN = localStorage.getItem('vercel-token');
+    if (!VERCEL_TOKEN) {
+        VERCEL_TOKEN = prompt('Enter your Vercel API token (from vercel.com/account/tokens):');
+        if (!VERCEL_TOKEN) return;
+        localStorage.setItem('vercel-token', VERCEL_TOKEN);
+    }
+    toast('Syncing from Vercel...');
+    
+    try {
+        const res = await fetch('https://api.vercel.com/v9/projects', {
+            headers: { 'Authorization': `Bearer ${VERCEL_TOKEN}` }
+        });
+        const data = await res.json();
+        
+        if (!data.projects) {
+            if (data.error) {
+                localStorage.removeItem('vercel-token');
+                toast('Invalid token - please try again');
+            } else {
+                toast('Failed to fetch projects');
+            }
+            return;
+        }
+        
+        let added = 0;
+        data.projects.forEach(p => {
+            // Check if already exists by URL or name
+            const url = p.targets?.production?.url 
+                ? `https://${p.targets.production.url}`
+                : `https://${p.name}.vercel.app`;
+            
+            const exists = state.sites.some(s => s.url === url || s.name === p.name);
+            if (exists) return;
+            
+            // Determine category from framework
+            let category = 'internal';
+            if (p.framework === 'nextjs') category = 'saas';
+            if (p.name.includes('client') || p.name.includes('sana') || p.name.includes('jj')) category = 'client';
+            
+            state.sites.push({
+                id: genId(),
+                name: p.name,
+                url,
+                status: 'live',
+                category,
+                description: '',
+                thumbnail: '',
+                hosting: 'Vercel',
+                techStack: p.framework || 'static',
+                client: '',
+                notes: '',
+                vercelId: p.id,
+                createdAt: new Date(p.createdAt || Date.now()).toISOString(),
+                updatedAt: new Date(p.updatedAt || Date.now()).toISOString()
+            });
+            added++;
+        });
+        
+        if (added > 0) {
+            save();
+            render();
+            toast(`Added ${added} projects from Vercel`);
+        } else {
+            toast('All Vercel projects already synced');
+        }
+    } catch (e) {
+        console.error(e);
+        toast('Error syncing Vercel projects');
+    }
+}
+
+async function deleteFromVercel(vercelId, name) {
+    const VERCEL_TOKEN = localStorage.getItem('vercel-token');
+    if (!VERCEL_TOKEN) {
+        toast('Vercel token not configured. Run sync first.');
+        return;
+    }
+    toast(`Deleting ${name} from Vercel...`);
+    
+    try {
+        const res = await fetch(`https://api.vercel.com/v9/projects/${vercelId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${VERCEL_TOKEN}` }
+        });
+        
+        if (res.ok) {
+            toast(`✓ Deleted ${name} from Vercel`);
+        } else {
+            const err = await res.json().catch(() => ({}));
+            toast(`Failed: ${err.error?.message || res.status}`);
+        }
+    } catch (e) {
+        console.error(e);
+        toast('Error deleting from Vercel');
+    }
 }
 
 document.addEventListener('keydown', e => {
